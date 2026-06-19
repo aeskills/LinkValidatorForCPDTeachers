@@ -822,6 +822,10 @@
       <div class="mapper-subtitle" id="mapper-subtitle">Select which CSV columns correspond to the fields. Auto-detected columns are pre-selected.</div>
       <div class="mapper-grid">
         <div class="mapper-field">
+          <label>Teacher's Name <span class="auto-badge matched" id="badge-name" style="display:none">✓ Auto</span><span class="auto-badge manual" id="badge-name-manual" style="display:none">Manual</span></label>
+          <select id="map-name"><option value="">(Not mapped)</option></select>
+        </div>
+        <div class="mapper-field">
           <label>School Name <span class="auto-badge matched" id="badge-school" style="display:none">✓ Auto</span><span class="auto-badge manual" id="badge-school-manual" style="display:none">Manual</span></label>
           <select id="map-school"><option value="">(Not mapped)</option></select>
         </div>
@@ -996,12 +1000,15 @@
     const $noResults       = document.getElementById('no-results');
     const $exportValid     = document.getElementById('export-valid');
     const $colMapper       = document.getElementById('col-mapper');
+    const $mapName         = document.getElementById('map-name');
     const $mapSchool       = document.getElementById('map-school');
     const $mapEmail        = document.getElementById('map-email');
     const $mapClassroom    = document.getElementById('map-classroom');
     const $mapAssignment   = document.getElementById('map-assignment');
     const $mapGallery      = document.getElementById('map-gallery');
     const $btnValidate     = document.getElementById('btn-validate-mapped');
+    const $badgeN          = document.getElementById('badge-name');
+    const $badgeNM         = document.getElementById('badge-name-manual');
     const $badgeS          = document.getElementById('badge-school');
     const $badgeSM         = document.getElementById('badge-school-manual');
     const $badgeE          = document.getElementById('badge-email');
@@ -1111,6 +1118,20 @@
           $dropZoneCompact.style.display = 'flex';
 
           // Try to auto-detect columns
+          // Auto-detect Teacher's Name
+          const nameKeywords = ['teacher name', 'teacher\'s name', 'name', 'full name', 'name of teacher'];
+          let colN = null;
+          for (const kw of nameKeywords) {
+            colN = findColumn(csvHeaders, kw);
+            if (colN) break;
+          }
+          if (!colN) {
+            colN = csvHeaders.find(h => {
+              const hl = h.trim().toLowerCase();
+              return hl.includes('name') && !hl.includes('school') && !hl.includes('email');
+            });
+          }
+
           // Auto-detect School Name (prioritizing actual names over yes/no columns)
           const schoolKeywords = ['school name', 'name of the school', 'exact name of the school', 'school'];
           let colS = null;
@@ -1159,13 +1180,14 @@
           if (!colA) colA = fuzzyFindColumn(csvHeaders, ['link', 'assignment']);
           if (!colG) colG = fuzzyFindColumn(csvHeaders, ['link', 'gallery']);
 
-          const autoS = !!colS, autoE = !!colE, autoC = !!colC, autoA = !!colA, autoG = !!colG;
-          const allFound = autoS && autoE && autoC && autoA && autoG;
+          const autoN = !!colN, autoS = !!colS, autoE = !!colE, autoC = !!colC, autoA = !!colA, autoG = !!colG;
+          const allFound = autoN && autoS && autoE && autoC && autoA && autoG;
 
           // Populate dropdowns with all headers
           populateMapperDropdowns(csvHeaders);
 
           // Set auto-detected values
+          if (colN) $mapName.value = colN;
           if (colS) $mapSchool.value = colS;
           if (colE) $mapEmail.value = colE;
           if (colC) $mapClassroom.value = colC;
@@ -1173,11 +1195,11 @@
           if (colG) $mapGallery.value = colG;
 
           // Show/hide auto badges
-          updateBadges(autoS, autoE, autoC, autoA, autoG);
+          updateBadges(autoN, autoS, autoE, autoC, autoA, autoG);
 
           if (allFound) {
             // All auto-detected → validate immediately, but still show mapper collapsed-ish
-            runValidation(colS, colE, colC, colA, colG);
+            runValidation(colN, colS, colE, colC, colA, colG);
           } else {
             // Show mapper panel for manual selection
             showMapper();
@@ -1197,7 +1219,7 @@
 
     /* ---------- COLUMN MAPPER ---------- */
     function populateMapperDropdowns(headers) {
-      [[$mapSchool], [$mapEmail], [$mapClassroom], [$mapAssignment], [$mapGallery]].forEach(([sel]) => {
+      [[$mapName], [$mapSchool], [$mapEmail], [$mapClassroom], [$mapAssignment], [$mapGallery]].forEach(([sel]) => {
         sel.innerHTML = '<option value="">(Not mapped)</option>';
         headers.forEach(h => {
           const opt = document.createElement('option');
@@ -1208,7 +1230,9 @@
       });
     }
 
-    function updateBadges(autoS, autoE, autoC, autoA, autoG) {
+    function updateBadges(autoN, autoS, autoE, autoC, autoA, autoG) {
+      $badgeN.style.display  = autoN ? 'inline-flex' : 'none';
+      $badgeNM.style.display = autoN ? 'none' : 'inline-flex';
       $badgeS.style.display  = autoS ? 'inline-flex' : 'none';
       $badgeSM.style.display = autoS ? 'none' : 'inline-flex';
       $badgeE.style.display  = autoE ? 'inline-flex' : 'none';
@@ -1231,6 +1255,7 @@
 
     // "Validate Now" button
     $btnValidate.addEventListener('click', () => {
+      const colN = $mapName.value || null;
       const colS = $mapSchool.value || null;
       const colE = $mapEmail.value || null;
       const colC = $mapClassroom.value || null;
@@ -1241,13 +1266,14 @@
         return;
       }
       hideWarning();
-      runValidation(colS, colE, colC, colA, colG);
+      runValidation(colN, colS, colE, colC, colA, colG);
     });
 
     // When user changes dropdowns, update badges
-    [$mapSchool, $mapEmail, $mapClassroom, $mapAssignment, $mapGallery].forEach((sel, i) => {
+    [$mapName, $mapSchool, $mapEmail, $mapClassroom, $mapAssignment, $mapGallery].forEach((sel, i) => {
       sel.addEventListener('change', () => {
         const badges = [
+          [$badgeN, $badgeNM],
           [$badgeS, $badgeSM],
           [$badgeE, $badgeEM],
           [$badgeC, $badgeCM],
@@ -1261,11 +1287,12 @@
     });
 
     /* ---------- RUN VALIDATION ---------- */
-    function runValidation(colS, colE, colC, colA, colG) {
+    function runValidation(colN, colS, colE, colC, colA, colG) {
       const colTimestamp = findColumn(csvHeaders, 'Timestamp') || findColumn(csvHeaders, 'timestamp');
-      const colName      = csvHeaders.find(h => h.trim().toLowerCase() === 'name') || csvHeaders.find(h => h.trim().toLowerCase().includes('name') && !h.trim().toLowerCase().includes('school') && !h.trim().toLowerCase().includes('email'));
+      const nameCol      = colN || csvHeaders.find(h => h.trim().toLowerCase() === 'name') || csvHeaders.find(h => h.trim().toLowerCase().includes('name') && !h.trim().toLowerCase().includes('school') && !h.trim().toLowerCase().includes('email'));
 
       validatedRows = parsedRows.map((row, idx) => {
+        const nVal = nameCol ? (row[nameCol] || '').trim() : '';
         const sVal = colS ? (row[colS] || '').trim() : '';
         const eVal = colE ? (row[colE] || '').trim() : '';
         const cVal = colC ? (row[colC] || '').trim() : '';
@@ -1286,7 +1313,7 @@
         return {
           rowNum: idx + 1,
           timestamp: colTimestamp ? (row[colTimestamp] || '') : '',
-          name: colName ? (row[colName] || '') : '',
+          name: nVal,
           school: sVal,
           email: eVal,
           classroomLink: cVal,
